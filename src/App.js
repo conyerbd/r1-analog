@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 
-import { Camera, Zap, ZapOff, Image as ImageIcon, RotateCcw, X, Aperture } from 'lucide-react';
+import { Camera, Zap, ZapOff, Image as ImageIcon, RotateCcw, X, Aperture, Share, Download } from 'lucide-react';
 
 
 
@@ -245,6 +245,106 @@ const RabbitCamera = () => {
 
 
     setPhotos(prev => [newPhoto, ...prev]);
+
+  };
+
+
+
+  // Helper to convert Data URL to Blob for sharing
+
+  const dataURItoBlob = (dataURI) => {
+
+    const byteString = atob(dataURI.split(',')[1]);
+
+    const mimeString = dataURI.split(',')[0].split(':')[1].split(';')[0];
+
+    const ab = new ArrayBuffer(byteString.length);
+
+    const ia = new Uint8Array(ab);
+
+    for (let i = 0; i < byteString.length; i++) {
+
+      ia[i] = byteString.charCodeAt(i);
+
+    }
+
+    return new Blob([ab], { type: mimeString });
+
+  };
+
+
+
+  // Share Functionality (Web Share API)
+
+  const handleShare = async (e, photo) => {
+
+    e.stopPropagation(); // Prevent bubbling if needed
+
+    
+
+    try {
+
+      const blob = dataURItoBlob(photo.url);
+
+      const file = new File([blob], `r1-analog-${photo.date.replace(/:/g, '-')}-${photo.filter.name}.jpg`, { type: 'image/jpeg' });
+
+      
+
+      // Check if Web Share API is available and supports files
+
+      if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+
+        await navigator.share({
+
+          files: [file],
+
+          title: 'Rabbit R1 Analog Photo',
+
+          text: `Shot on R1 Analog using ${photo.filter.label} film.`
+
+        });
+
+      } else {
+
+        // Fallback: Download
+
+        downloadPhoto(photo);
+
+      }
+
+    } catch (error) {
+
+      // User cancelled share or error occurred - fallback to download
+
+      if (error.name !== 'AbortError') {
+
+        console.log('Sharing failed, using download fallback:', error);
+
+      }
+
+      downloadPhoto(photo);
+
+    }
+
+  };
+
+
+
+  // Download Functionality
+
+  const downloadPhoto = (photo) => {
+
+    const link = document.createElement('a');
+
+    link.href = photo.url;
+
+    link.download = `r1-analog-${photo.date.replace(/:/g, '-')}-${photo.filter.name}.jpg`;
+
+    document.body.appendChild(link);
+
+    link.click();
+
+    document.body.removeChild(link);
 
   };
 
@@ -584,7 +684,37 @@ const RabbitCamera = () => {
 
                                     </div>
 
-                                    <div className="text-[8px] font-bold text-[#D32F2F]">R1-CAM</div>
+                                    <div className="flex items-center gap-1.5">
+
+                                        <button 
+
+                                            onClick={(e) => handleShare(e, photo)} 
+
+                                            className="p-1 bg-[#D32F2F] rounded active:scale-95 transition-transform"
+
+                                            title="Share photo"
+
+                                        >
+
+                                            <Share size={10} className="text-white" />
+
+                                        </button>
+
+                                        <button 
+
+                                            onClick={(e) => { e.stopPropagation(); downloadPhoto(photo); }} 
+
+                                            className="p-1 bg-black rounded active:scale-95 transition-transform"
+
+                                            title="Download photo"
+
+                                        >
+
+                                            <Download size={10} className="text-white" />
+
+                                        </button>
+
+                                    </div>
 
                                 </div>
 
