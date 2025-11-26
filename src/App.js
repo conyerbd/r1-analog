@@ -228,6 +228,26 @@ const RabbitCamera = () => {
 
 
 
+  // Ensure video element gets the stream when it's rendered
+
+  useEffect(() => {
+
+    if (stream && videoRef.current && hasPermission) {
+
+      videoRef.current.srcObject = stream;
+
+      videoRef.current.play()
+
+        .then(() => addLog("Video element playback started"))
+
+        .catch(e => addLog(`Video play error: ${e.message}`));
+
+    }
+
+  }, [stream, hasPermission]);
+
+
+
   // Auto-scroll debug log
 
   useEffect(() => {
