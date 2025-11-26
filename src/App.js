@@ -268,9 +268,9 @@ const RabbitCamera = () => {
 
       
 
-      {/* Device Frame (The R1 Hardware Simulation) - Adapted for 240x300px */}
+      {/* Device Frame (The R1 Hardware Simulation) - GREEN VERSION */}
 
-      <div className="relative w-[240px] h-[300px] bg-[#FF4F00] flex flex-col overflow-hidden shadow-2xl">
+      <div className="relative w-[240px] h-[300px] bg-[#388E3C] flex flex-col overflow-hidden shadow-2xl">
 
         
 
@@ -284,11 +284,11 @@ const RabbitCamera = () => {
 
             <div className="flex justify-between items-center mb-1 text-black font-bold text-[8px] uppercase tracking-wider">
 
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1 text-[#D32F2F]">
 
-                   <div className="w-1.5 h-1.5 bg-black rounded-full animate-pulse"></div>
+                   <div className="w-1.5 h-1.5 bg-[#D32F2F] rounded-full animate-pulse"></div>
 
-                   <span>REC</span>
+                   <span>R1-ANALOG</span>
 
                 </div>
 
@@ -374,13 +374,13 @@ const RabbitCamera = () => {
 
 
 
-                {/* Developing Animation Overlay */}
+                {/* Developing Animation Overlay - RED ACCENT */}
 
                 {isDeveloping && (
 
                     <div className="absolute inset-0 bg-black flex items-center justify-center z-40">
 
-                        <div className="text-[#FF4F00] font-black text-sm animate-bounce tracking-tighter">
+                        <div className="text-[#D32F2F] font-black text-sm animate-bounce tracking-tighter">
 
                             DEVELOPING...
 
@@ -406,19 +406,19 @@ const RabbitCamera = () => {
 
                 
 
-                {/* Gallery / Info Box */}
+                {/* Gallery / Info Box - NOW BLACK & RED */}
 
                 <div 
 
                     onClick={() => setGalleryOpen(true)}
 
-                    className="col-span-1 bg-white rounded-xl flex flex-col items-center justify-center cursor-pointer active:scale-95 transition-transform border-b-2 border-gray-300 p-1"
+                    className="col-span-1 bg-black rounded-xl flex flex-col items-center justify-center cursor-pointer active:scale-95 transition-transform border-b-2 border-gray-800 p-1"
 
                 >
 
                     {photos.length > 0 ? (
 
-                        <div className="relative w-6 h-6 rounded overflow-hidden border border-black">
+                        <div className="relative w-6 h-6 rounded overflow-hidden border border-[#D32F2F]">
 
                             <img src={photos[0].url} className={`w-full h-full object-cover ${photos[0].filter.class}`} alt="thumb" />
 
@@ -426,17 +426,17 @@ const RabbitCamera = () => {
 
                     ) : (
 
-                        <ImageIcon size={16} className="text-black" />
+                        <ImageIcon size={16} className="text-[#D32F2F]" />
 
                     )}
 
-                    <span className="text-[7px] font-bold mt-0.5 text-black">GALLERY</span>
+                    <span className="text-[7px] font-bold mt-0.5 text-[#D32F2F]">GALLERY</span>
 
                 </div>
 
 
 
-                {/* Shutter Button */}
+                {/* Shutter Button - NOW BLACK & RED */}
 
                 <div className="col-span-2 flex items-center justify-center">
 
@@ -448,11 +448,11 @@ const RabbitCamera = () => {
 
                         className={`
 
-                            w-16 h-16 rounded-full border-4 border-white
+                            w-16 h-16 rounded-full border-4 border-black
 
                             flex items-center justify-center shadow-lg transition-all duration-100
 
-                            ${shutterPressed ? 'scale-90 bg-gray-200' : 'scale-100 bg-white'}
+                            ${shutterPressed ? 'scale-90 bg-black' : 'scale-100 bg-black'}
 
                             ${shotsLeft <= 0 ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
 
@@ -460,7 +460,9 @@ const RabbitCamera = () => {
 
                     >
 
-                        <div className={`w-14 h-14 rounded-full border-2 border-gray-100 ${shutterPressed ? 'bg-gray-300' : 'bg-gray-50'}`}></div>
+                        {/* Red inner button */}
+
+                        <div className={`w-14 h-14 rounded-full border-2 border-red-900 ${shutterPressed ? 'bg-red-900' : 'bg-[#D32F2F]'}`}></div>
 
                     </button>
 
@@ -468,9 +470,9 @@ const RabbitCamera = () => {
 
 
 
-                {/* Film Counter / Settings */}
+                {/* Film Counter / Settings - RED ACCENT */}
 
-                <div className="col-span-1 bg-black rounded-xl flex flex-col items-center justify-center text-[#FF4F00] border-b-2 border-gray-800 p-1">
+                <div className="col-span-1 bg-black rounded-xl flex flex-col items-center justify-center text-[#D32F2F] border-b-2 border-gray-800 p-1">
 
                     <span className="text-[7px] font-bold opacity-70">EXP</span>
 
@@ -582,7 +584,7 @@ const RabbitCamera = () => {
 
                                     </div>
 
-                                    <div className="text-[8px] font-bold text-[#FF4F00]">R1-CAM</div>
+                                    <div className="text-[8px] font-bold text-[#D32F2F]">R1-CAM</div>
 
                                 </div>
 
