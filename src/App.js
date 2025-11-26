@@ -136,8 +136,6 @@ const RabbitCamera = () => {
 
       const mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
 
-      setStream(mediaStream);
-
       addLog(`Stream active: ${mediaStream.id}`);
 
       
@@ -156,29 +154,11 @@ const RabbitCamera = () => {
 
 
 
-      // Explicitly wait a tick before setting srcObject to ensure ref is stable
-
-      if (videoRef.current) {
-
-        videoRef.current.srcObject = mediaStream;
-
-        // Force play inside the promise chain
-
-        try {
-
-            await videoRef.current.play();
-
-            addLog("Playback started successfully");
-
-        } catch (playErr) {
-
-            addLog(`Auto-play failed (requires interaction?): ${playErr.message}`);
-
-        }
-
-      }
+      // Set permission first so video element renders, then set stream in useEffect
 
       setHasPermission(true);
+
+      setStream(mediaStream);
 
     } catch (err) {
 
@@ -234,13 +214,27 @@ const RabbitCamera = () => {
 
     if (stream && videoRef.current && hasPermission) {
 
-      videoRef.current.srcObject = stream;
+      // Wait a tick to ensure video element is fully mounted
 
-      videoRef.current.play()
+      const timer = setTimeout(() => {
 
-        .then(() => addLog("Video element playback started"))
+        if (videoRef.current && stream) {
 
-        .catch(e => addLog(`Video play error: ${e.message}`));
+          videoRef.current.srcObject = stream;
+
+          videoRef.current.play()
+
+            .then(() => addLog("Video element playback started"))
+
+            .catch(e => addLog(`Video play error: ${e.message}`));
+
+        }
+
+      }, 50);
+
+
+
+      return () => clearTimeout(timer);
 
     }
 
