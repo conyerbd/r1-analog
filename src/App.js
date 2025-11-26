@@ -142,6 +142,20 @@ const RabbitCamera = () => {
 
         videoRef.current.srcObject = mediaStream;
 
+        // Explicitly trigger play to fix "black play button" issue
+
+        try {
+
+            await videoRef.current.play();
+
+            addLog("Playback started successfully");
+
+        } catch (playErr) {
+
+            addLog(`Auto-play failed: ${playErr.message}`);
+
+        }
+
       }
 
       setHasPermission(true);
@@ -230,9 +244,29 @@ const RabbitCamera = () => {
 
       });
 
-      // Reset tap count if too slow
+      // Reset tap count if too slow (Increased to 3s for easier tapping on device)
 
-      setTimeout(() => setTapCount(0), 1000);
+      setTimeout(() => setTapCount(0), 3000);
+
+  };
+
+
+
+  // Manual Play Trigger (Fallback for grey screen)
+
+  const handleManualPlay = () => {
+
+      if (videoRef.current) {
+
+          addLog("Attempting manual play...");
+
+          videoRef.current.play()
+
+            .then(() => addLog("Manual play success"))
+
+            .catch(e => addLog(`Manual play fail: ${e.message}`));
+
+      }
 
   };
 
@@ -601,6 +635,8 @@ const RabbitCamera = () => {
                             <button onClick={() => startCamera({ video: true })} className="bg-green-900/50 p-1 rounded hover:bg-green-800 text-[6px]">Start (Basic)</button>
 
                             <button onClick={listDevices} className="bg-green-900/50 p-1 rounded hover:bg-green-800 text-[6px]">List Devices</button>
+
+                            <button onClick={handleManualPlay} className="bg-green-900/50 p-1 rounded hover:bg-green-800 text-[6px] col-span-2">Manual Play</button>
 
                         </div>
 
