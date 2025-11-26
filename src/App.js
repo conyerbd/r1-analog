@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 
-import { Camera, Zap, ZapOff, Image as ImageIcon, RotateCcw, X, Aperture, Share, Terminal, RefreshCw } from 'lucide-react';
+import { Camera, Zap, ZapOff, Image as ImageIcon, RotateCcw, X, Aperture, Share, Terminal, RefreshCw, Power } from 'lucide-react';
 
 
 
@@ -94,7 +94,25 @@ const RabbitCamera = () => {
 
 
 
-  const startCamera = async (constraints = { video: { facingMode: 'environment', width: { ideal: 240 }, height: { ideal: 240 } } }) => {
+  // The "Env" constraints that were confirmed to work
+
+  const ENV_CONSTRAINTS = { 
+
+    video: { 
+
+        facingMode: 'environment', 
+
+        width: { ideal: 240 }, 
+
+        height: { ideal: 240 } 
+
+    } 
+
+  };
+
+
+
+  const startCamera = async (constraints = ENV_CONSTRAINTS) => {
 
     stopCamera();
 
@@ -138,11 +156,13 @@ const RabbitCamera = () => {
 
 
 
+      // Explicitly wait a tick before setting srcObject to ensure ref is stable
+
       if (videoRef.current) {
 
         videoRef.current.srcObject = mediaStream;
 
-        // Explicitly trigger play to fix "black play button" issue
+        // Force play inside the promise chain
 
         try {
 
@@ -152,7 +172,7 @@ const RabbitCamera = () => {
 
         } catch (playErr) {
 
-            addLog(`Auto-play failed: ${playErr.message}`);
+            addLog(`Auto-play failed (requires interaction?): ${playErr.message}`);
 
         }
 
@@ -196,7 +216,7 @@ const RabbitCamera = () => {
 
 
 
-  // Initial Camera Start
+  // Initial Camera Start - Still try on mount, but provide UI fallback
 
   useEffect(() => {
 
@@ -252,7 +272,7 @@ const RabbitCamera = () => {
 
 
 
-  // Manual Play Trigger (Fallback for grey screen)
+  // Manual Play Trigger
 
   const handleManualPlay = () => {
 
@@ -272,7 +292,7 @@ const RabbitCamera = () => {
 
 
 
-  // Rabbit R1 Scroll Wheel Integration for Filter Selection
+  // Rabbit R1 Scroll Wheel Integration
 
   useEffect(() => {
 
@@ -534,7 +554,7 @@ const RabbitCamera = () => {
 
                     onClick={handleLogoTap}
 
-                    className="flex items-center gap-1 text-[#D32F2F] cursor-pointer select-none active:opacity-50"
+                    className="flex items-center gap-1 text-[#D32F2F] cursor-pointer select-none active:opacity-50 p-2 -ml-2 -mt-2 z-50"
 
                 >
 
@@ -562,7 +582,7 @@ const RabbitCamera = () => {
 
             {/* Viewfinder Card */}
 
-            <div className="flex-1 bg-black rounded-xl overflow-hidden relative border-2 border-black shadow-inner">
+            <div className="flex-1 bg-black rounded-xl overflow-hidden relative border-2 border-black shadow-inner group">
 
                 {/* Hardware Flash Overlay */}
 
@@ -570,7 +590,7 @@ const RabbitCamera = () => {
 
 
 
-                {/* Video Feed */}
+                {/* Video Feed or Start Button */}
 
                 {hasPermission ? (
 
@@ -584,19 +604,35 @@ const RabbitCamera = () => {
 
                         muted 
 
+                        onClick={handleManualPlay}
+
+                        onLoadedMetadata={handleManualPlay}
+
                         className={`w-full h-full object-cover transform transition-all duration-300 ${filters[filterIndex].class}`}
 
                     />
 
                 ) : (
 
-                    <div className="w-full h-full flex flex-col items-center justify-center text-neutral-500 bg-neutral-900 gap-2">
+                    // RETRO PHYSICAL START BUTTON
 
-                        <Aperture className="animate-spin duration-[10s]" size={32} />
+                    <button 
 
-                        <span className="text-[8px] uppercase tracking-widest">Lens Cap On</span>
+                        onClick={() => startCamera(ENV_CONSTRAINTS)}
 
-                    </div>
+                        className="w-full h-full flex flex-col items-center justify-center bg-[#1a1a1a] cursor-pointer z-30 relative group"
+
+                    >
+
+                         <div className="w-20 h-20 bg-[#2a2a2a] rounded-xl border-b-4 border-r-4 border-black flex items-center justify-center active:border-b-0 active:border-r-0 active:translate-y-1 active:translate-x-1 transition-all shadow-xl">
+
+                             <Power size={32} className="text-[#D32F2F] opacity-90 group-hover:opacity-100 group-hover:drop-shadow-[0_0_8px_rgba(211,47,47,0.6)]" />
+
+                         </div>
+
+                         <span className="text-[#444] font-black text-[10px] tracking-widest mt-4 group-hover:text-[#D32F2F] transition-colors">INITIALIZE</span>
+
+                    </button>
 
                 )}
 
@@ -628,15 +664,13 @@ const RabbitCamera = () => {
 
                         <div className="grid grid-cols-2 gap-1">
 
-                            <button onClick={() => startCamera({ video: { facingMode: 'environment', width: { ideal: 240 }, height: { ideal: 240 } } })} className="bg-green-900/50 p-1 rounded hover:bg-green-800 text-[6px]">Start (Env)</button>
+                            <button onClick={() => startCamera(ENV_CONSTRAINTS)} className="bg-green-900/50 p-1 rounded hover:bg-green-800 text-[6px] border border-green-700">Start (Env)</button>
 
-                            <button onClick={() => startCamera({ video: { facingMode: 'user' } })} className="bg-green-900/50 p-1 rounded hover:bg-green-800 text-[6px]">Start (User)</button>
+                            <button onClick={() => startCamera({ video: { facingMode: 'user' } })} className="bg-green-900/50 p-1 rounded hover:bg-green-800 text-[6px] border border-green-700">Start (User)</button>
 
-                            <button onClick={() => startCamera({ video: true })} className="bg-green-900/50 p-1 rounded hover:bg-green-800 text-[6px]">Start (Basic)</button>
+                            <button onClick={() => startCamera({ video: true })} className="bg-green-900/50 p-1 rounded hover:bg-green-800 text-[6px] border border-green-700">Start (Basic)</button>
 
-                            <button onClick={listDevices} className="bg-green-900/50 p-1 rounded hover:bg-green-800 text-[6px]">List Devices</button>
-
-                            <button onClick={handleManualPlay} className="bg-green-900/50 p-1 rounded hover:bg-green-800 text-[6px] col-span-2">Manual Play</button>
+                            <button onClick={listDevices} className="bg-green-900/50 p-1 rounded hover:bg-green-800 text-[6px] border border-green-700">List Devices</button>
 
                         </div>
 
@@ -646,23 +680,25 @@ const RabbitCamera = () => {
 
                 
 
-                {/* Viewfinder HUD */}
+                {/* Viewfinder HUD - Only show if debug is OFF and we have permission */}
 
-                {!debugMode && (
+                {!debugMode && hasPermission && (
 
                     <div className="absolute inset-0 pointer-events-none border border-white/10 m-2 rounded">
 
-                        {/* Crosshair */}
+                        {/* Crosshair - Top Left */}
 
-                        <div className="absolute top-1/2 left-1/2 w-3 h-3 -ml-1.5 -mt-1.5 border-l border-t border-white/50"></div>
+                        <div className="absolute top-2 left-2 w-3 h-3 border-l border-t border-white/50"></div>
 
-                        <div className="absolute top-1/2 left-1/2 w-3 h-3 -ml-1.5 -mt-1.5 border-r border-b border-white/50 rotate-180"></div>
+                        {/* Crosshair - Bottom Right */}
+
+                        <div className="absolute bottom-2 right-2 w-3 h-3 border-r border-b border-white/50"></div>
 
                         
 
-                        {/* Filter Name */}
+                        {/* Filter Name - Bottom Left */}
 
-                        <div className="absolute bottom-1 right-1 bg-black/50 backdrop-blur-md px-1.5 py-0.5 rounded text-white text-[8px] font-bold uppercase">
+                        <div className="absolute bottom-1 left-1 bg-black/50 backdrop-blur-md px-1.5 py-0.5 rounded text-white text-[8px] font-bold uppercase">
 
                             {filters[filterIndex].name}
 
