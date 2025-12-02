@@ -298,85 +298,47 @@ const RabbitCamera = () => {
     return new Blob([ab], { type: mimeString });
   };
 
-  // Imgur API - using anonymous upload
+  // Imgur API - single image upload
   const IMGUR_CLIENT_ID = 'f29493ee6a19c47';
 
-  const uploadToImgur = async (base64Image) => {
-    const base64Data = base64Image.split(',')[1];
-
-    const response = await fetch('https://api.imgur.com/3/image', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Client-ID ${IMGUR_CLIENT_ID}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        image: base64Data,
-        type: 'base64',
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Upload failed: ${response.status}`);
-    }
-
-    const data = await response.json();
-    return data.data;
-  };
-
-  const createImgurAlbum = async (imageIds) => {
-    const response = await fetch('https://api.imgur.com/3/album', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Client-ID ${IMGUR_CLIENT_ID}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        ids: imageIds,
-        title: `R1-Analog Roll - ${new Date().toLocaleDateString()}`,
-        description: 'Shot on Rabbit R1 with R1-Analog camera app',
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Album creation failed: ${response.status}`);
-    }
-
-    const data = await response.json();
-    return data.data;
-  };
-
-  const handleUploadAll = async () => {
-    if (photos.length === 0) return;
-
+  const handleUploadSingle = async (photo) => {
     setIsUploading(true);
     setUploadProgress(0);
     setUploadError(null);
     setAlbumUrl(null);
 
     try {
-      const imageIds = [];
-      const totalPhotos = photos.length;
+      addLog(`Uploading photo...`);
+      setUploadProgress(30);
 
-      // Upload each photo
-      for (let i = 0; i < photos.length; i++) {
-        const photo = photos[i];
-        addLog(`Uploading photo ${i + 1}/${totalPhotos}...`);
+      const base64Data = photo.url.split(',')[1];
 
-        const result = await uploadToImgur(photo.url);
-        imageIds.push(result.id);
+      const response = await fetch('https://api.imgur.com/3/image', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Client-ID ${IMGUR_CLIENT_ID}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          image: base64Data,
+          type: 'base64',
+          title: `R1-Analog - ${photo.filter.label}`,
+          description: 'Shot on Rabbit R1 with R1-Analog camera app',
+        }),
+      });
 
-        setUploadProgress(((i + 1) / (totalPhotos + 1)) * 100);
+      setUploadProgress(80);
+
+      if (!response.ok) {
+        throw new Error(`Upload failed: ${response.status}`);
       }
 
-      // Create album with all images
-      addLog('Creating album...');
-      const album = await createImgurAlbum(imageIds);
+      const data = await response.json();
+      const imageUrl = data.data.link;
 
-      const albumLink = `https://imgur.com/a/${album.id}`;
-      setAlbumUrl(albumLink);
+      setAlbumUrl(imageUrl);
       setUploadProgress(100);
-      addLog(`Album created: ${albumLink}`);
+      addLog(`Upload complete: ${imageUrl}`);
 
     } catch (error) {
       console.error('Upload failed:', error);
@@ -560,12 +522,19 @@ const RabbitCamera = () => {
                     <div className="aspect-[4/3] bg-gray-100 rounded overflow-hidden mb-1">
                       <img src={photo.url} alt="capture" className="w-full h-full object-cover" />
                     </div>
-                    <div className="flex justify-between items-end">
+                    <div className="flex justify-between items-center">
                       <div>
                         <div className="text-[8px] text-gray-500 font-bold uppercase tracking-wider">{photo.filter.label}</div>
                         <div className="text-[8px] font-mono text-gray-400">{photo.date}</div>
                       </div>
-                      <div className="text-[8px] font-bold text-[#D32F2F]">R1-CAM</div>
+                      <button
+                        onClick={() => handleUploadSingle(photo)}
+                        disabled={isUploading}
+                        className="px-2 py-1 bg-[#D32F2F] text-white rounded font-bold text-[8px] flex items-center gap-1 active:scale-95 transition-transform disabled:opacity-50"
+                      >
+                        <Upload size={10} />
+                        UPLOAD
+                      </button>
                     </div>
                   </div>
                 ))
@@ -573,18 +542,8 @@ const RabbitCamera = () => {
             </div>
 
             {/* Bottom actions */}
-            <div className="p-2 bg-white border-t space-y-2">
-              {photos.length > 0 && (
-                <button
-                  onClick={handleUploadAll}
-                  disabled={isUploading}
-                  className="w-full py-2 bg-[#D32F2F] text-white rounded-lg font-bold flex items-center justify-center gap-1.5 active:scale-95 transition-transform text-xs disabled:opacity-50"
-                >
-                  <Upload size={12} />
-                  {isUploading ? 'UPLOADING...' : 'UPLOAD ALL'}
-                </button>
-              )}
-              {shotsLeft < 24 && (
+            {shotsLeft < 24 && (
+              <div className="p-2 bg-white border-t">
                 <button
                   onClick={reloadFilm}
                   className="w-full py-2 bg-black text-white rounded-lg font-bold flex items-center justify-center gap-1.5 active:scale-95 transition-transform text-xs"
@@ -592,8 +551,8 @@ const RabbitCamera = () => {
                   <RotateCcw size={12} />
                   RELOAD FILM
                 </button>
-              )}
-            </div>
+              </div>
+            )}
           </div>
         </div>
       )}
