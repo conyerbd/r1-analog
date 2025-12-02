@@ -594,9 +594,9 @@ const RabbitCamera = () => {
 
 
 
-            {/* Viewfinder Card */}
+            {/* Viewfinder Card - Fixed height to prevent layout shift */}
 
-            <div className="flex-1 bg-black rounded-xl overflow-hidden relative border-2 border-black shadow-inner group">
+            <div className="h-[170px] bg-black rounded-xl overflow-hidden relative border-2 border-black shadow-inner group">
 
                 {/* Hardware Flash Overlay */}
 
