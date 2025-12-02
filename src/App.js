@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Camera, Zap, ZapOff, Image as ImageIcon, RotateCcw, X, Aperture, Share, Terminal, RefreshCw, Power } from 'lucide-react';
+import { Camera, Zap, ZapOff, Image as ImageIcon, RotateCcw, X, Aperture, Upload, Terminal, RefreshCw, Power } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 
 const RabbitCamera = () => {
   const [hasPermission, setHasPermission] = useState(false);
@@ -20,6 +21,12 @@ const RabbitCamera = () => {
   // Swipe state for initialize gesture
   const [swipeStartY, setSwipeStartY] = useState(null);
   const [swipeProgress, setSwipeProgress] = useState(0);
+
+  // Upload state
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [albumUrl, setAlbumUrl] = useState(null);
+  const [uploadError, setUploadError] = useState(null);
 
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
@@ -223,6 +230,31 @@ const RabbitCamera = () => {
     }, 800);
   };
 
+  // Convert filter class names to canvas filter string
+  const getCanvasFilter = (filterObj) => {
+    const filterClass = filterObj.class;
+    let canvasFilter = '';
+
+    // Parse Tailwind classes to CSS filter values
+    if (filterClass.includes('grayscale')) canvasFilter += 'grayscale(100%) ';
+    if (filterClass.includes('sepia-[.4]')) canvasFilter += 'sepia(40%) ';
+    if (filterClass.includes('sepia-[.2]')) canvasFilter += 'sepia(20%) ';
+
+    const brightnessMatch = filterClass.match(/brightness-(\d+)/);
+    if (brightnessMatch) canvasFilter += `brightness(${parseInt(brightnessMatch[1]) / 100}) `;
+
+    const contrastMatch = filterClass.match(/contrast-(\d+)/);
+    if (contrastMatch) canvasFilter += `contrast(${parseInt(contrastMatch[1]) / 100}) `;
+
+    const saturateMatch = filterClass.match(/saturate-(\d+)/);
+    if (saturateMatch) canvasFilter += `saturate(${parseInt(saturateMatch[1]) / 100}) `;
+
+    const hueMatch = filterClass.match(/hue-rotate-\[(-?\d+)deg\]/);
+    if (hueMatch) canvasFilter += `hue-rotate(${hueMatch[1]}deg) `;
+
+    return canvasFilter.trim() || 'none';
+  };
+
   const captureImage = () => {
     if (!videoRef.current || !canvasRef.current) return;
 
@@ -230,15 +262,24 @@ const RabbitCamera = () => {
     const canvas = canvasRef.current;
     const context = canvas.getContext('2d');
 
+    // Use full video resolution
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
+
+    // Apply filter to canvas context
+    const currentFilter = filters[filterIndex];
+    context.filter = getCanvasFilter(currentFilter);
+
     context.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-    const imgUrl = canvas.toDataURL('image/jpeg');
+    // Reset filter
+    context.filter = 'none';
+
+    const imgUrl = canvas.toDataURL('image/jpeg', 0.92);
     const newPhoto = {
       id: Date.now(),
       url: imgUrl,
-      filter: filters[filterIndex],
+      filter: currentFilter,
       date: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
 
@@ -257,34 +298,92 @@ const RabbitCamera = () => {
     return new Blob([ab], { type: mimeString });
   };
 
-  const handleShare = async (e, photo) => {
-    e.stopPropagation();
-    try {
-      const blob = dataURItoBlob(photo.url);
-      const file = new File([blob], `r1-analog-${photo.id}.jpg`, { type: 'image/jpeg' });
+  // Imgur API - using anonymous upload
+  const IMGUR_CLIENT_ID = 'f29493ee6a19c47';
 
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({
-          files: [file],
-          title: 'Rabbit R1 Analog Photo',
-          text: `Shot on R1 Analog using ${photo.filter.name} film.`
-        });
-      } else {
-        const link = document.createElement('a');
-        link.href = photo.url;
-        link.download = `r1-analog-${photo.id}.jpg`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+  const uploadToImgur = async (base64Image) => {
+    const base64Data = base64Image.split(',')[1];
+
+    const response = await fetch('https://api.imgur.com/3/image', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Client-ID ${IMGUR_CLIENT_ID}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        image: base64Data,
+        type: 'base64',
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Upload failed: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return data.data;
+  };
+
+  const createImgurAlbum = async (imageIds) => {
+    const response = await fetch('https://api.imgur.com/3/album', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Client-ID ${IMGUR_CLIENT_ID}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        ids: imageIds,
+        title: `R1-Analog Roll - ${new Date().toLocaleDateString()}`,
+        description: 'Shot on Rabbit R1 with R1-Analog camera app',
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Album creation failed: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return data.data;
+  };
+
+  const handleUploadAll = async () => {
+    if (photos.length === 0) return;
+
+    setIsUploading(true);
+    setUploadProgress(0);
+    setUploadError(null);
+    setAlbumUrl(null);
+
+    try {
+      const imageIds = [];
+      const totalPhotos = photos.length;
+
+      // Upload each photo
+      for (let i = 0; i < photos.length; i++) {
+        const photo = photos[i];
+        addLog(`Uploading photo ${i + 1}/${totalPhotos}...`);
+
+        const result = await uploadToImgur(photo.url);
+        imageIds.push(result.id);
+
+        setUploadProgress(((i + 1) / (totalPhotos + 1)) * 100);
       }
+
+      // Create album with all images
+      addLog('Creating album...');
+      const album = await createImgurAlbum(imageIds);
+
+      const albumLink = `https://imgur.com/a/${album.id}`;
+      setAlbumUrl(albumLink);
+      setUploadProgress(100);
+      addLog(`Album created: ${albumLink}`);
+
     } catch (error) {
-      console.log('Sharing failed', error);
-      const link = document.createElement('a');
-      link.href = photo.url;
-      link.download = `r1-analog-${photo.id}.jpg`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      console.error('Upload failed:', error);
+      addLog(`Upload error: ${error.message}`);
+      setUploadError(error.message);
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -459,30 +558,33 @@ const RabbitCamera = () => {
                 photos.map((photo) => (
                   <div key={photo.id} className="bg-white p-2 rounded-lg shadow-sm border border-gray-200">
                     <div className="aspect-[4/3] bg-gray-100 rounded overflow-hidden mb-1">
-                      <img src={photo.url} alt="capture" className={`w-full h-full object-cover ${photo.filter.class}`} />
+                      <img src={photo.url} alt="capture" className="w-full h-full object-cover" />
                     </div>
                     <div className="flex justify-between items-end">
                       <div>
                         <div className="text-[8px] text-gray-500 font-bold uppercase tracking-wider">{photo.filter.label}</div>
                         <div className="text-[8px] font-mono text-gray-400">{photo.date}</div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={(e) => handleShare(e, photo)}
-                          className="p-1 bg-gray-100 rounded hover:bg-gray-200 active:scale-95 transition-transform"
-                        >
-                          <Share size={10} className="text-black" />
-                        </button>
-                        <div className="text-[8px] font-bold text-[#D32F2F]">R1-CAM</div>
-                      </div>
+                      <div className="text-[8px] font-bold text-[#D32F2F]">R1-CAM</div>
                     </div>
                   </div>
                 ))
               )}
             </div>
 
-            {shotsLeft < 24 && (
-              <div className="p-2 bg-white border-t">
+            {/* Bottom actions */}
+            <div className="p-2 bg-white border-t space-y-2">
+              {photos.length > 0 && (
+                <button
+                  onClick={handleUploadAll}
+                  disabled={isUploading}
+                  className="w-full py-2 bg-[#D32F2F] text-white rounded-lg font-bold flex items-center justify-center gap-1.5 active:scale-95 transition-transform text-xs disabled:opacity-50"
+                >
+                  <Upload size={12} />
+                  {isUploading ? 'UPLOADING...' : 'UPLOAD ALL'}
+                </button>
+              )}
+              {shotsLeft < 24 && (
                 <button
                   onClick={reloadFilm}
                   className="w-full py-2 bg-black text-white rounded-lg font-bold flex items-center justify-center gap-1.5 active:scale-95 transition-transform text-xs"
@@ -490,8 +592,59 @@ const RabbitCamera = () => {
                   <RotateCcw size={12} />
                   RELOAD FILM
                 </button>
-              </div>
-            )}
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Upload Progress Overlay */}
+      {isUploading && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/95 p-4">
+          <div className="w-full max-w-[200px] text-center">
+            <div className="text-[#D32F2F] font-bold text-sm mb-4">UPLOADING</div>
+            <div className="w-full h-2 bg-gray-800 rounded-full overflow-hidden mb-2">
+              <div
+                className="h-full bg-[#D32F2F] transition-all duration-300"
+                style={{ width: `${uploadProgress}%` }}
+              />
+            </div>
+            <div className="text-white/60 text-xs">{Math.round(uploadProgress)}%</div>
+          </div>
+        </div>
+      )}
+
+      {/* QR Code Modal */}
+      {albumUrl && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/95 p-2">
+          <div className="bg-white w-full max-w-[220px] rounded-2xl overflow-hidden flex flex-col items-center p-4">
+            <div className="text-[#D32F2F] font-bold text-sm mb-3">SCAN TO VIEW</div>
+            <div className="bg-white p-2 rounded-lg shadow-inner">
+              <QRCodeSVG value={albumUrl} size={140} level="M" />
+            </div>
+            <div className="mt-3 text-[8px] text-gray-500 text-center break-all px-2">{albumUrl}</div>
+            <button
+              onClick={() => setAlbumUrl(null)}
+              className="mt-4 w-full py-2 bg-black text-white rounded-lg font-bold text-xs active:scale-95 transition-transform"
+            >
+              DONE
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Upload Error Modal */}
+      {uploadError && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/95 p-4">
+          <div className="bg-white w-full max-w-[200px] rounded-2xl overflow-hidden flex flex-col items-center p-4">
+            <div className="text-[#D32F2F] font-bold text-sm mb-2">UPLOAD FAILED</div>
+            <div className="text-[10px] text-gray-600 text-center mb-4">{uploadError}</div>
+            <button
+              onClick={() => setUploadError(null)}
+              className="w-full py-2 bg-black text-white rounded-lg font-bold text-xs active:scale-95 transition-transform"
+            >
+              OK
+            </button>
           </div>
         </div>
       )}
