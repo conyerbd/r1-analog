@@ -380,49 +380,13 @@ const RabbitCamera = () => {
         }
       }
 
-      // Generate a ZIP archive of all uploaded images
-      addLog('Creating download archive...');
+      // Create a direct download URL for all images
+      // Using Cloudinary's URL-based archive: /image/archive with public_ids parameter
+      addLog('Creating download link...');
 
-      const archiveTimestamp = Math.floor(Date.now() / 1000);
-
-      // For signature, public_ids must be in same order as form data (not sorted)
-      const publicIdsString = uploadedIds.join(',');
-
-      // Note: Do NOT include mode: 'download' - that returns binary data instead of JSON
-      // type: 'upload' makes the archive publicly accessible
-      const archiveSignature = await generateSignature({
-        public_ids: publicIdsString,
-        target_format: 'zip',
-        timestamp: archiveTimestamp,
-        type: 'upload',
-      });
-
-      const archiveFormData = new FormData();
-      // Each public_id must be appended separately
-      uploadedIds.forEach(id => {
-        archiveFormData.append('public_ids[]', id);
-      });
-      archiveFormData.append('target_format', 'zip');
-      archiveFormData.append('timestamp', archiveTimestamp);
-      archiveFormData.append('type', 'upload');
-      archiveFormData.append('api_key', CLOUDINARY_API_KEY);
-      archiveFormData.append('signature', archiveSignature);
-
-      const archiveResponse = await fetch(
-        `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/generate_archive`,
-        {
-          method: 'POST',
-          body: archiveFormData,
-        }
-      );
-
-      if (!archiveResponse.ok) {
-        const errorData = await archiveResponse.json();
-        throw new Error(errorData.error?.message || `Archive failed: ${archiveResponse.status}`);
-      }
-
-      const archiveData = await archiveResponse.json();
-      const downloadUrl = archiveData.secure_url;
+      // Build a URL that triggers automatic ZIP download of all images
+      const publicIdsParam = uploadedIds.map(id => `public_ids[]=${encodeURIComponent(id)}`).join('&');
+      const downloadUrl = `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/archive?${publicIdsParam}`;
 
       setAlbumUrl(downloadUrl);
       addLog(`Download ready: ${downloadUrl}`);
