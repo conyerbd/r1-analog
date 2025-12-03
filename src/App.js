@@ -384,23 +384,24 @@ const RabbitCamera = () => {
       addLog('Creating download archive...');
 
       const archiveTimestamp = Math.floor(Date.now() / 1000);
-      const archiveParams = {
-        mode: 'download',
-        public_ids: uploadedIds.join(','),
-        target_format: 'zip',
-        timestamp: archiveTimestamp,
-      };
+
+      // For signature, public_ids must be sorted and joined with comma
+      const sortedIds = [...uploadedIds].sort();
+      const publicIdsString = sortedIds.join(',');
 
       const archiveSignature = await generateSignature({
         mode: 'download',
-        public_ids: uploadedIds.join(','),
+        public_ids: publicIdsString,
         target_format: 'zip',
         timestamp: archiveTimestamp,
       });
 
       const archiveFormData = new FormData();
       archiveFormData.append('mode', 'download');
-      archiveFormData.append('public_ids[]', uploadedIds.join(','));
+      // Each public_id must be appended separately
+      uploadedIds.forEach(id => {
+        archiveFormData.append('public_ids[]', id);
+      });
       archiveFormData.append('target_format', 'zip');
       archiveFormData.append('timestamp', archiveTimestamp);
       archiveFormData.append('api_key', CLOUDINARY_API_KEY);
