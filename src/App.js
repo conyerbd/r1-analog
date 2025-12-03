@@ -297,8 +297,8 @@ const RabbitCamera = () => {
     return new Blob([ab], { type: mimeString });
   };
 
-  // Imgur API - gallery upload
-  const IMGUR_CLIENT_ID = 'f29493ee6a19c47';
+  // ImgBB API - reliable free image hosting
+  const IMGBB_API_KEY = '44ab2a4f5ce754d839bea66374e498a1';
 
   const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -311,26 +311,24 @@ const RabbitCamera = () => {
     setAlbumUrl(null);
 
     try {
-      const imageIds = [];
+      const uploadedUrls = [];
       const totalPhotos = photos.length;
 
-      // Upload each photo
+      // Upload each photo to ImgBB
       for (let i = 0; i < photos.length; i++) {
         const photo = photos[i];
         addLog(`Uploading photo ${i + 1}/${totalPhotos}...`);
 
         const base64Data = photo.url.split(',')[1];
 
-        const response = await fetch('https://api.imgur.com/3/image', {
+        const formData = new FormData();
+        formData.append('key', IMGBB_API_KEY);
+        formData.append('image', base64Data);
+        formData.append('name', `r1-analog-${photo.id}`);
+
+        const response = await fetch('https://api.imgbb.com/1/upload', {
           method: 'POST',
-          headers: {
-            'Authorization': `Client-ID ${IMGUR_CLIENT_ID}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            image: base64Data,
-            type: 'base64',
-          }),
+          body: formData,
         });
 
         if (!response.ok) {
@@ -338,41 +336,24 @@ const RabbitCamera = () => {
         }
 
         const data = await response.json();
-        imageIds.push(data.data.deletehash);
+        if (!data.success) {
+          throw new Error(data.error?.message || 'Upload failed');
+        }
 
-        setUploadProgress(((i + 1) / (totalPhotos + 1)) * 100);
+        uploadedUrls.push(data.data.url);
+        setUploadProgress(((i + 1) / totalPhotos) * 100);
 
-        // Small delay between uploads to avoid rate limits
+        // Small delay between uploads
         if (i < photos.length - 1) {
-          await delay(300);
+          await delay(500);
         }
       }
 
-      // Create album with all images
-      addLog('Creating album...');
-      const albumResponse = await fetch('https://api.imgur.com/3/album', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Client-ID ${IMGUR_CLIENT_ID}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          deletehashes: imageIds,
-          title: `R1-Analog Roll - ${new Date().toLocaleDateString()}`,
-          description: 'Shot on Rabbit R1 with R1-Analog camera app',
-        }),
-      });
-
-      if (!albumResponse.ok) {
-        throw new Error(`Album creation failed: ${albumResponse.status}`);
-      }
-
-      const albumData = await albumResponse.json();
-      const albumLink = `https://imgur.com/a/${albumData.data.id}`;
-
-      setAlbumUrl(albumLink);
-      setUploadProgress(100);
-      addLog(`Album created: ${albumLink}`);
+      // ImgBB doesn't have albums, so we'll show the first image
+      // All URLs are logged for debug mode
+      setAlbumUrl(uploadedUrls[0]);
+      addLog(`Upload complete: ${uploadedUrls.length} photos`);
+      uploadedUrls.forEach((url, i) => addLog(`Photo ${i + 1}: ${url}`));
 
     } catch (error) {
       console.error('Upload failed:', error);
