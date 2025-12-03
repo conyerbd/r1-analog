@@ -385,9 +385,8 @@ const RabbitCamera = () => {
 
       const archiveTimestamp = Math.floor(Date.now() / 1000);
 
-      // For signature, public_ids must be sorted and joined with comma
-      const sortedIds = [...uploadedIds].sort();
-      const publicIdsString = sortedIds.join(',');
+      // For signature, public_ids must be in same order as form data (not sorted)
+      const publicIdsString = uploadedIds.join(',');
 
       const archiveSignature = await generateSignature({
         mode: 'download',
