@@ -388,15 +388,14 @@ const RabbitCamera = () => {
       // For signature, public_ids must be in same order as form data (not sorted)
       const publicIdsString = uploadedIds.join(',');
 
+      // Note: Do NOT include mode: 'download' - that returns binary data instead of JSON
       const archiveSignature = await generateSignature({
-        mode: 'download',
         public_ids: publicIdsString,
         target_format: 'zip',
         timestamp: archiveTimestamp,
       });
 
       const archiveFormData = new FormData();
-      archiveFormData.append('mode', 'download');
       // Each public_id must be appended separately
       uploadedIds.forEach(id => {
         archiveFormData.append('public_ids[]', id);
