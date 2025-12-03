@@ -56,12 +56,12 @@ const RabbitCamera = () => {
     }
   };
 
-  // The "Env" constraints that were confirmed to work
+  // Request high resolution for capture, viewfinder will scale down for display
   const ENV_CONSTRAINTS = {
     video: {
       facingMode: 'environment',
-      width: { ideal: 240 },
-      height: { ideal: 240 }
+      width: { ideal: 1920 },
+      height: { ideal: 1080 }
     }
   };
 
@@ -380,15 +380,50 @@ const RabbitCamera = () => {
         }
       }
 
-      // Create a gallery URL using Cloudinary's transformation URL
-      // This creates a multi-image view
-      const galleryUrl = `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/${folder}`;
+      // Generate a ZIP archive of all uploaded images
+      addLog('Creating download archive...');
 
-      // For QR code, use the folder URL or first image
-      const firstImageUrl = `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/${uploadedIds[0]}`;
+      const archiveTimestamp = Math.floor(Date.now() / 1000);
+      const archiveParams = {
+        mode: 'download',
+        public_ids: uploadedIds.join(','),
+        target_format: 'zip',
+        timestamp: archiveTimestamp,
+      };
 
-      setAlbumUrl(firstImageUrl);
-      addLog(`Upload complete: ${uploadedIds.length} photos to folder ${folder}`);
+      const archiveSignature = await generateSignature({
+        mode: 'download',
+        public_ids: uploadedIds.join(','),
+        target_format: 'zip',
+        timestamp: archiveTimestamp,
+      });
+
+      const archiveFormData = new FormData();
+      archiveFormData.append('mode', 'download');
+      archiveFormData.append('public_ids[]', uploadedIds.join(','));
+      archiveFormData.append('target_format', 'zip');
+      archiveFormData.append('timestamp', archiveTimestamp);
+      archiveFormData.append('api_key', CLOUDINARY_API_KEY);
+      archiveFormData.append('signature', archiveSignature);
+
+      const archiveResponse = await fetch(
+        `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/generate_archive`,
+        {
+          method: 'POST',
+          body: archiveFormData,
+        }
+      );
+
+      if (!archiveResponse.ok) {
+        const errorData = await archiveResponse.json();
+        throw new Error(errorData.error?.message || `Archive failed: ${archiveResponse.status}`);
+      }
+
+      const archiveData = await archiveResponse.json();
+      const downloadUrl = archiveData.secure_url;
+
+      setAlbumUrl(downloadUrl);
+      addLog(`Download ready: ${downloadUrl}`);
 
     } catch (error) {
       console.error('Upload failed:', error);
@@ -566,7 +601,7 @@ const RabbitCamera = () => {
       {albumUrl && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/95 p-2">
           <div className="bg-white w-full max-w-[220px] rounded-2xl overflow-hidden flex flex-col items-center p-4">
-            <div className="text-[#D32F2F] font-bold text-sm mb-3">SCAN TO VIEW</div>
+            <div className="text-[#D32F2F] font-bold text-sm mb-3">SCAN TO DOWNLOAD</div>
             <div className="bg-white p-2 rounded-lg shadow-inner">
               <QRCodeSVG value={albumUrl} size={140} level="M" />
             </div>
