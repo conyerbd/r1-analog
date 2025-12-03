@@ -389,10 +389,12 @@ const RabbitCamera = () => {
       const publicIdsString = uploadedIds.join(',');
 
       // Note: Do NOT include mode: 'download' - that returns binary data instead of JSON
+      // type: 'upload' makes the archive publicly accessible
       const archiveSignature = await generateSignature({
         public_ids: publicIdsString,
         target_format: 'zip',
         timestamp: archiveTimestamp,
+        type: 'upload',
       });
 
       const archiveFormData = new FormData();
@@ -402,6 +404,7 @@ const RabbitCamera = () => {
       });
       archiveFormData.append('target_format', 'zip');
       archiveFormData.append('timestamp', archiveTimestamp);
+      archiveFormData.append('type', 'upload');
       archiveFormData.append('api_key', CLOUDINARY_API_KEY);
       archiveFormData.append('signature', archiveSignature);
 
