@@ -297,9 +297,7 @@ const RabbitCamera = () => {
     return new Blob([ab], { type: mimeString });
   };
 
-  // ImgBB API - reliable free image hosting
-  const IMGBB_API_KEY = '44ab2a4f5ce754d839bea66374e498a1';
-
+  // Catbox.moe - free anonymous image hosting, no API key needed
   const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
   const handleUploadGallery = async () => {
@@ -314,19 +312,26 @@ const RabbitCamera = () => {
       const uploadedUrls = [];
       const totalPhotos = photos.length;
 
-      // Upload each photo to ImgBB
+      // Upload each photo to Catbox
       for (let i = 0; i < photos.length; i++) {
         const photo = photos[i];
         addLog(`Uploading photo ${i + 1}/${totalPhotos}...`);
 
+        // Convert base64 to blob
         const base64Data = photo.url.split(',')[1];
+        const byteCharacters = atob(base64Data);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let j = 0; j < byteCharacters.length; j++) {
+          byteNumbers[j] = byteCharacters.charCodeAt(j);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        const blob = new Blob([byteArray], { type: 'image/jpeg' });
 
         const formData = new FormData();
-        formData.append('key', IMGBB_API_KEY);
-        formData.append('image', base64Data);
-        formData.append('name', `r1-analog-${photo.id}`);
+        formData.append('reqtype', 'fileupload');
+        formData.append('fileToUpload', blob, `r1-analog-${photo.id}.jpg`);
 
-        const response = await fetch('https://api.imgbb.com/1/upload', {
+        const response = await fetch('https://catbox.moe/user/api.php', {
           method: 'POST',
           body: formData,
         });
@@ -335,12 +340,12 @@ const RabbitCamera = () => {
           throw new Error(`Upload failed: ${response.status}`);
         }
 
-        const data = await response.json();
-        if (!data.success) {
-          throw new Error(data.error?.message || 'Upload failed');
+        const url = await response.text();
+        if (!url.startsWith('http')) {
+          throw new Error(url || 'Upload failed');
         }
 
-        uploadedUrls.push(data.data.url);
+        uploadedUrls.push(url.trim());
         setUploadProgress(((i + 1) / totalPhotos) * 100);
 
         // Small delay between uploads
@@ -349,8 +354,7 @@ const RabbitCamera = () => {
         }
       }
 
-      // ImgBB doesn't have albums, so we'll show the first image
-      // All URLs are logged for debug mode
+      // Show first image URL (all URLs logged in debug)
       setAlbumUrl(uploadedUrls[0]);
       addLog(`Upload complete: ${uploadedUrls.length} photos`);
       uploadedUrls.forEach((url, i) => addLog(`Photo ${i + 1}: ${url}`));
