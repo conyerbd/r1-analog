@@ -1,15 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Camera, Zap, ZapOff, Image as ImageIcon, RotateCcw, X, Aperture, Upload, Terminal, RefreshCw, Power } from 'lucide-react';
+import { Zap, ZapOff, X, Terminal, Power } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 
 const RabbitCamera = () => {
   const [hasPermission, setHasPermission] = useState(false);
   const [stream, setStream] = useState(null);
   const [flash, setFlash] = useState(false);
-  const [shotsLeft, setShotsLeft] = useState(24);
+  const [shotsLeft, setShotsLeft] = useState(5);
   const [filterIndex, setFilterIndex] = useState(0);
   const [isDeveloping, setIsDeveloping] = useState(false);
-  const [galleryOpen, setGalleryOpen] = useState(false);
   const [photos, setPhotos] = useState([]);
   const [shutterPressed, setShutterPressed] = useState(false);
 
@@ -298,47 +297,82 @@ const RabbitCamera = () => {
     return new Blob([ab], { type: mimeString });
   };
 
-  // Imgur API - single image upload
+  // Imgur API - gallery upload
   const IMGUR_CLIENT_ID = 'f29493ee6a19c47';
 
-  const handleUploadSingle = async (photo) => {
+  const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+  const handleUploadGallery = async () => {
+    if (photos.length === 0) return;
+
     setIsUploading(true);
     setUploadProgress(0);
     setUploadError(null);
     setAlbumUrl(null);
 
     try {
-      addLog(`Uploading photo...`);
-      setUploadProgress(30);
+      const imageIds = [];
+      const totalPhotos = photos.length;
 
-      const base64Data = photo.url.split(',')[1];
+      // Upload each photo
+      for (let i = 0; i < photos.length; i++) {
+        const photo = photos[i];
+        addLog(`Uploading photo ${i + 1}/${totalPhotos}...`);
 
-      const response = await fetch('https://api.imgur.com/3/image', {
+        const base64Data = photo.url.split(',')[1];
+
+        const response = await fetch('https://api.imgur.com/3/image', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Client-ID ${IMGUR_CLIENT_ID}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            image: base64Data,
+            type: 'base64',
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error(`Upload failed: ${response.status}`);
+        }
+
+        const data = await response.json();
+        imageIds.push(data.data.deletehash);
+
+        setUploadProgress(((i + 1) / (totalPhotos + 1)) * 100);
+
+        // Small delay between uploads to avoid rate limits
+        if (i < photos.length - 1) {
+          await delay(300);
+        }
+      }
+
+      // Create album with all images
+      addLog('Creating album...');
+      const albumResponse = await fetch('https://api.imgur.com/3/album', {
         method: 'POST',
         headers: {
           'Authorization': `Client-ID ${IMGUR_CLIENT_ID}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          image: base64Data,
-          type: 'base64',
-          title: `R1-Analog - ${photo.filter.label}`,
+          deletehashes: imageIds,
+          title: `R1-Analog Roll - ${new Date().toLocaleDateString()}`,
           description: 'Shot on Rabbit R1 with R1-Analog camera app',
         }),
       });
 
-      setUploadProgress(80);
-
-      if (!response.ok) {
-        throw new Error(`Upload failed: ${response.status}`);
+      if (!albumResponse.ok) {
+        throw new Error(`Album creation failed: ${albumResponse.status}`);
       }
 
-      const data = await response.json();
-      const imageUrl = data.data.link;
+      const albumData = await albumResponse.json();
+      const albumLink = `https://imgur.com/a/${albumData.data.id}`;
 
-      setAlbumUrl(imageUrl);
+      setAlbumUrl(albumLink);
       setUploadProgress(100);
-      addLog(`Upload complete: ${imageUrl}`);
+      addLog(`Album created: ${albumLink}`);
 
     } catch (error) {
       console.error('Upload failed:', error);
@@ -350,7 +384,7 @@ const RabbitCamera = () => {
   };
 
   const reloadFilm = () => {
-    setShotsLeft(24);
+    setShotsLeft(5);
     setPhotos([]);
   };
 
@@ -466,16 +500,13 @@ const RabbitCamera = () => {
 
           {/* Main controls row */}
           <div className="flex items-center justify-between">
-            {/* Gallery button */}
-            <div onClick={() => setGalleryOpen(true)} className="w-12 h-12 bg-black/50 backdrop-blur rounded-lg flex flex-col items-center justify-center cursor-pointer active:scale-95 transition-transform border border-white/10">
-              {photos.length > 0 ? (
-                <div className="relative w-6 h-6 rounded overflow-hidden border border-[#D32F2F]">
-                  <img src={photos[0].url} className={`w-full h-full object-cover ${photos[0].filter.class}`} alt="thumb" />
-                </div>
-              ) : (
-                <ImageIcon size={16} className="text-white/70" />
-              )}
-              <span className="text-[6px] font-bold mt-0.5 text-white/50">{photos.length}</span>
+            {/* Photos taken counter - tap to upload gallery */}
+            <div
+              onClick={photos.length > 0 ? handleUploadGallery : undefined}
+              className={`w-12 h-12 bg-black/50 backdrop-blur rounded-lg flex flex-col items-center justify-center border border-white/10 ${photos.length > 0 ? 'cursor-pointer active:scale-95 transition-transform' : ''}`}
+            >
+              <span className={`text-lg font-black leading-none ${photos.length > 0 ? 'text-[#D32F2F]' : 'text-white/30'}`}>{photos.length}</span>
+              <span className="text-[6px] text-white/50 font-bold">{photos.length > 0 ? 'UPLOAD' : 'PHOTOS'}</span>
             </div>
 
             {/* Shutter Button */}
@@ -487,9 +518,9 @@ const RabbitCamera = () => {
               <div className={`w-12 h-12 rounded-full ${shutterPressed ? 'bg-red-900' : 'bg-[#D32F2F]'}`}></div>
             </button>
 
-            {/* Exposure counter */}
+            {/* Shots remaining counter */}
             <div className="w-12 h-12 bg-black/50 backdrop-blur rounded-lg flex flex-col items-center justify-center border border-white/10">
-              <span className="text-lg font-black text-[#D32F2F] leading-none">{shotsLeft}</span>
+              <span className="text-lg font-black text-white/70 leading-none">{shotsLeft}</span>
               <span className="text-[6px] text-white/50 font-bold">LEFT</span>
             </div>
           </div>
@@ -498,64 +529,6 @@ const RabbitCamera = () => {
         {/* Hidden Canvas for capture */}
         <canvas ref={canvasRef} className="hidden" />
       </div>
-
-      {/* Gallery Overlay */}
-      {galleryOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-2 backdrop-blur-sm">
-          <div className="bg-[#f0f0f0] w-full max-w-[240px] h-[280px] rounded-2xl overflow-hidden flex flex-col relative shadow-2xl">
-            <div className="p-2 bg-white border-b flex justify-between items-center">
-              <h2 className="font-bold text-sm tracking-tight">CAMERA ROLL</h2>
-              <button onClick={() => setGalleryOpen(false)} className="p-1 bg-gray-100 rounded-full hover:bg-gray-200">
-                <X size={16} />
-              </button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-2 space-y-2">
-              {photos.length === 0 ? (
-                <div className="h-full flex flex-col items-center justify-center text-gray-400 gap-2">
-                  <ImageIcon size={32} />
-                  <p className="text-xs">No photos yet.</p>
-                </div>
-              ) : (
-                photos.map((photo) => (
-                  <div key={photo.id} className="bg-white p-2 rounded-lg shadow-sm border border-gray-200">
-                    <div className="aspect-[4/3] bg-gray-100 rounded overflow-hidden mb-1">
-                      <img src={photo.url} alt="capture" className="w-full h-full object-cover" />
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <div>
-                        <div className="text-[8px] text-gray-500 font-bold uppercase tracking-wider">{photo.filter.label}</div>
-                        <div className="text-[8px] font-mono text-gray-400">{photo.date}</div>
-                      </div>
-                      <button
-                        onClick={() => handleUploadSingle(photo)}
-                        disabled={isUploading}
-                        className="px-2 py-1 bg-[#D32F2F] text-white rounded font-bold text-[8px] flex items-center gap-1 active:scale-95 transition-transform disabled:opacity-50"
-                      >
-                        <Upload size={10} />
-                        UPLOAD
-                      </button>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-
-            {/* Bottom actions */}
-            {shotsLeft < 24 && (
-              <div className="p-2 bg-white border-t">
-                <button
-                  onClick={reloadFilm}
-                  className="w-full py-2 bg-black text-white rounded-lg font-bold flex items-center justify-center gap-1.5 active:scale-95 transition-transform text-xs"
-                >
-                  <RotateCcw size={12} />
-                  RELOAD FILM
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
 
       {/* Upload Progress Overlay */}
       {isUploading && (
