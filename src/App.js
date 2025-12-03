@@ -297,8 +297,30 @@ const RabbitCamera = () => {
     return new Blob([ab], { type: mimeString });
   };
 
-  // Catbox.moe - free anonymous image hosting, no API key needed
+  // Cloudinary configuration
+  const CLOUDINARY_CLOUD_NAME = 'dvyjecxco';
+  const CLOUDINARY_API_KEY = '593788555271441';
+  const CLOUDINARY_API_SECRET = 'HZpuTToHEWEINlS837tGQMcrpH4';
+
   const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+  // Generate SHA-1 signature for Cloudinary
+  const generateSignature = async (paramsToSign) => {
+    const sortedParams = Object.keys(paramsToSign)
+      .sort()
+      .map(key => `${key}=${paramsToSign[key]}`)
+      .join('&');
+
+    const stringToSign = sortedParams + CLOUDINARY_API_SECRET;
+
+    const encoder = new TextEncoder();
+    const data = encoder.encode(stringToSign);
+    const hashBuffer = await crypto.subtle.digest('SHA-1', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+
+    return hashHex;
+  };
 
   const handleUploadGallery = async () => {
     if (photos.length === 0) return;
@@ -309,55 +331,64 @@ const RabbitCamera = () => {
     setAlbumUrl(null);
 
     try {
-      const uploadedUrls = [];
+      const uploadedIds = [];
       const totalPhotos = photos.length;
+      const timestamp = Math.floor(Date.now() / 1000);
+      const folder = `r1-analog-${timestamp}`;
 
-      // Upload each photo to Catbox
+      // Upload each photo to Cloudinary
       for (let i = 0; i < photos.length; i++) {
         const photo = photos[i];
         addLog(`Uploading photo ${i + 1}/${totalPhotos}...`);
 
-        // Convert base64 to blob
-        const base64Data = photo.url.split(',')[1];
-        const byteCharacters = atob(base64Data);
-        const byteNumbers = new Array(byteCharacters.length);
-        for (let j = 0; j < byteCharacters.length; j++) {
-          byteNumbers[j] = byteCharacters.charCodeAt(j);
-        }
-        const byteArray = new Uint8Array(byteNumbers);
-        const blob = new Blob([byteArray], { type: 'image/jpeg' });
+        const paramsToSign = {
+          folder: folder,
+          timestamp: timestamp,
+        };
+
+        const signature = await generateSignature(paramsToSign);
 
         const formData = new FormData();
-        formData.append('reqtype', 'fileupload');
-        formData.append('fileToUpload', blob, `r1-analog-${photo.id}.jpg`);
+        formData.append('file', photo.url);
+        formData.append('api_key', CLOUDINARY_API_KEY);
+        formData.append('timestamp', timestamp);
+        formData.append('signature', signature);
+        formData.append('folder', folder);
 
-        const response = await fetch('https://catbox.moe/user/api.php', {
-          method: 'POST',
-          body: formData,
-        });
+        const response = await fetch(
+          `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`,
+          {
+            method: 'POST',
+            body: formData,
+          }
+        );
 
         if (!response.ok) {
-          throw new Error(`Upload failed: ${response.status}`);
+          const errorData = await response.json();
+          throw new Error(errorData.error?.message || `Upload failed: ${response.status}`);
         }
 
-        const url = await response.text();
-        if (!url.startsWith('http')) {
-          throw new Error(url || 'Upload failed');
-        }
+        const data = await response.json();
+        uploadedIds.push(data.public_id);
+        addLog(`Uploaded: ${data.secure_url}`);
 
-        uploadedUrls.push(url.trim());
         setUploadProgress(((i + 1) / totalPhotos) * 100);
 
         // Small delay between uploads
         if (i < photos.length - 1) {
-          await delay(500);
+          await delay(300);
         }
       }
 
-      // Show first image URL (all URLs logged in debug)
-      setAlbumUrl(uploadedUrls[0]);
-      addLog(`Upload complete: ${uploadedUrls.length} photos`);
-      uploadedUrls.forEach((url, i) => addLog(`Photo ${i + 1}: ${url}`));
+      // Create a gallery URL using Cloudinary's transformation URL
+      // This creates a multi-image view
+      const galleryUrl = `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/${folder}`;
+
+      // For QR code, use the folder URL or first image
+      const firstImageUrl = `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/${uploadedIds[0]}`;
+
+      setAlbumUrl(firstImageUrl);
+      addLog(`Upload complete: ${uploadedIds.length} photos to folder ${folder}`);
 
     } catch (error) {
       console.error('Upload failed:', error);
