@@ -298,8 +298,8 @@ const RabbitCamera = () => {
     return new Blob([ab], { type: mimeString });
   };
 
-  // Imgur API - single image upload
-  const IMGUR_CLIENT_ID = 'f29493ee6a19c47';
+  // ImgBB API - more generous rate limits
+  const IMGBB_API_KEY = '44ab2a4f5ce754d839bea66374e498a1';
 
   const handleUploadSingle = async (photo) => {
     setIsUploading(true);
@@ -313,18 +313,14 @@ const RabbitCamera = () => {
 
       const base64Data = photo.url.split(',')[1];
 
-      const response = await fetch('https://api.imgur.com/3/image', {
+      const formData = new FormData();
+      formData.append('key', IMGBB_API_KEY);
+      formData.append('image', base64Data);
+      formData.append('name', `r1-analog-${photo.id}`);
+
+      const response = await fetch('https://api.imgbb.com/1/upload', {
         method: 'POST',
-        headers: {
-          'Authorization': `Client-ID ${IMGUR_CLIENT_ID}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          image: base64Data,
-          type: 'base64',
-          title: `R1-Analog - ${photo.filter.label}`,
-          description: 'Shot on Rabbit R1 with R1-Analog camera app',
-        }),
+        body: formData,
       });
 
       setUploadProgress(80);
@@ -334,7 +330,12 @@ const RabbitCamera = () => {
       }
 
       const data = await response.json();
-      const imageUrl = data.data.link;
+
+      if (!data.success) {
+        throw new Error(data.error?.message || 'Upload failed');
+      }
+
+      const imageUrl = data.data.url;
 
       setAlbumUrl(imageUrl);
       setUploadProgress(100);
